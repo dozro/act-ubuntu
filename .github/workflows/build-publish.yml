@@ -1,0 +1,89 @@
+name: Publish Docker images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ format('{0}/act-ubuntu', github.repository_owner) }}
+  PLATFORMS: linux/amd64,linux/arm64
+  MIRROR_REGISTRY: ${{ vars.MIRROR_REGISTRY }}
+  MIRROR_IMAGE_NAME: ${{ vars.MIRROR_IMAGE_NAME }}
+  MIRROR_USERNAME: ${{ secrets.MIRROR_REGISTRY_USERNAME }}
+  MIRROR_PASSWORD: ${{ secrets.MIRROR_REGISTRY_PASSWORD }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+
+      - name: Resolve registry targets
+        id: targets
+        shell: bash
+        run: |
+          images="${REGISTRY}/${IMAGE_NAME}"
+          mirror_enabled=false
+
+          if [ -n "${MIRROR_REGISTRY}" ] && [ -n "${MIRROR_IMAGE_NAME}" ]; then
+            images="$(printf '%s\n%s' "${images}" "${MIRROR_REGISTRY}/${MIRROR_IMAGE_NAME}")"
+            mirror_enabled=true
+          fi
+
+          {
+            echo "mirror_enabled=${mirror_enabled}"
+            printf 'images<<EOF\n%s\nEOF\n' "${images}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to mirror registry
+        if: ${{ steps.targets.outputs.mirror_enabled == 'true' }}
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ env.MIRROR_USERNAME }}
+          password: ${{ env.MIRROR_PASSWORD }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ steps.targets.outputs.images }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: ./DOCKERFILE
+          push: true
+          platforms: ${{ env.PLATFORMS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
