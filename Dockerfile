@@ -8,12 +8,12 @@ LABEL org.opencontainers.image.source="https://git.gay/rye/act-ubuntu"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-        git curl wget sudo bash ca-certificates gnupg jq tar gzip unzip coreutils && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt update && apt upgrade -y
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        nodejs npm && \
-    rm -rf /var/lib/apt/lists/* && \
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        git curl wget sudo bash ca-certificates gnupg jq tar gzip unzip coreutils 
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt install -y nodejs && \
     corepack enable
