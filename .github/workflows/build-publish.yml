@@ -6,6 +6,9 @@ on:
       - main
     tags:
       - 'v*'
+    schedule:
+      - cron: '0 3 * * *'
+        timezone: "Europe/Amsterdam"
   workflow_dispatch:
 
 env:
@@ -77,6 +80,8 @@ jobs:
             type=ref,event=tag
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=nightly,enable=${{ github.event_name == 'schedule' }}
+            type=schedule,pattern=nightly-{{date 'YYYYMMDD'}}
 
       - name: Build and push image
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
