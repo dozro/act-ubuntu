@@ -1,4 +1,4 @@
-FROM ubuntu:jammy
+FROM ubuntu:rolling
 
 LABEL org.opencontainers.image.title="Ubuntu Actions Runner"
 LABEL org.opencontainers.image.description="simple fake ubuntu actions runner for act"
