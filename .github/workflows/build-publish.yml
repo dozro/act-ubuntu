@@ -19,6 +19,8 @@ env:
   MIRROR_IMAGE_NAME: ${{ vars.MIRROR_IMAGE_NAME }}
   MIRROR_USERNAME: ${{ secrets.MIRROR_REGISTRY_USERNAME }}
   MIRROR_PASSWORD: ${{ secrets.MIRROR_REGISTRY_PASSWORD }}
+  HUB_USERNAME: ${{ secrets.DHUB_REGISTRY_USERNAME }}
+  HUB_PASSWORD: ${{ secrets.DHUB_REGISTRY_PASSWORD }}
 
 permissions:
   contents: read
@@ -43,13 +45,22 @@ jobs:
         id: targets
         shell: bash
         run: |
-          images="${REGISTRY}/${IMAGE_NAME}"
+          set -o errexit -o nounset -o pipefail
+          repo_name="${IMAGE_NAME##*/}"         # e.g. act-ubuntu
+          images="${REGISTRY}/${IMAGE_NAME}"    # ghcr.io/<owner>/act-ubuntu
           mirror_enabled=false
 
-          if [ -n "${MIRROR_REGISTRY}" ] && [ -n "${MIRROR_IMAGE_NAME}" ]; then
+          # add Docker Hub target (uses HUB_USERNAME env)
+          if [ -n "${HUB_USERNAME:-}" ]; then
+            images="$(printf '%s\n%s' "${images}" "${HUB_USERNAME}/${repo_name}")"
+          fi
+
+          if [ -n "${MIRROR_REGISTRY:-}" ] && [ -n "${MIRROR_IMAGE_NAME:-}" ]; then
             images="$(printf '%s\n%s' "${images}" "${MIRROR_REGISTRY}/${MIRROR_IMAGE_NAME}")"
             mirror_enabled=true
           fi
+
+          images="$(printf '%s\n' "${images}" | awk 'NF')"
 
           {
             echo "mirror_enabled=${mirror_enabled}"
@@ -68,7 +79,12 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: Log in to docker hub
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ env.HUB_USERNAME }}
+          password: ${{ env.HUB_PASSWORD }}
+      
       - name: Log in to mirror registry
         if: ${{ steps.targets.outputs.mirror_enabled == 'true' }}
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
@@ -76,7 +92,6 @@ jobs:
           registry: ${{ env.MIRROR_REGISTRY }}
           username: ${{ env.MIRROR_USERNAME }}
           password: ${{ env.MIRROR_PASSWORD }}
-
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
