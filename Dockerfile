@@ -1,4 +1,5 @@
-FROM ubuntu:rolling
+ARG UBUNTU_VERSION=rolling
+FROM ubuntu:${UBUNTU_VERSION}
 
 LABEL org.opencontainers.image.title="Ubuntu Actions Runner"
 LABEL org.opencontainers.image.description="simple fake ubuntu actions runner for act"

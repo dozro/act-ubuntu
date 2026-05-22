@@ -6,9 +6,9 @@ on:
       - main
     tags:
       - 'v*'
-    schedule:
-      - cron: '0 3 * * *'
-        timezone: "Europe/Amsterdam"
+  schedule:
+    - cron: '0 3 * * *'
+      timezone: "Europe/Amsterdam"
   workflow_dispatch:
 
 env:
@@ -27,7 +27,14 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version:
+          - rolling
+          - jammy
+          - questing
+          - noble
     steps:
       - name: Checkout repository
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
@@ -72,23 +79,23 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
         with:
           images: ${{ steps.targets.outputs.images }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=nightly,enable=${{ github.event_name == 'schedule' }}
-            type=schedule,pattern=nightly-{{date 'YYYYMMDD'}}
+            type=raw,value=${{ matrix.ubuntu_version }}
+            type=raw,value=${{ matrix.ubuntu_version }}-latest,enable={{is_default_branch}}
+            type=sha,prefix=${{ matrix.ubuntu_version }}-
+            type=ref,event=tag,suffix=-${{ matrix.ubuntu_version }}
 
       - name: Build and push image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
         with:
           context: .
           file: ./Dockerfile
           push: true
           platforms: ${{ env.PLATFORMS }}
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
